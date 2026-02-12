@@ -113,7 +113,6 @@ if [ -f "$HOME/.openclaw/openclaw.json" ]; then
     if jq -e '.gateway.nodes.denyCommands' "$HOME/.openclaw/openclaw.json" >/dev/null 2>&1; then
         DENIED=$(jq '.gateway.nodes.denyCommands | length' "$HOME/.openclaw/openclaw.json")
         pass "denyCommands configured ($DENIED commands blocked)"
-        # Check specific critical commands
         if jq -e '.gateway.nodes.denyCommands | index("system.run")' "$HOME/.openclaw/openclaw.json" >/dev/null 2>&1; then
             pass "system.run is BLOCKED"
         else
