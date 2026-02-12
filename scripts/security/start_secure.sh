@@ -185,19 +185,16 @@ echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║   🦀 Agent launching in sandboxed environment...    ║"
 echo "║                                                      ║"
-║   Sandbox: Nono (Apple Seatbelt kernel enforcement)  ║
-║   Credentials: macOS Keychain → env injection        ║"
-║   Tool proxy: claw-proxy daemon (Unix socket)        ║"
-║   Blocked: system.run, camera, screen, sms           ║"
-║                                                      ║"
-║   Press Ctrl+C to stop                               ║"
+echo "║   Sandbox: Nono (Apple Seatbelt kernel enforcement)  ║"
+echo "║   Credentials: macOS Keychain → env injection        ║"
+echo "║   Tool proxy: claw-proxy daemon (Unix socket)        ║"
+echo "║   Blocked: system.run, camera, screen, sms           ║"
+echo "║                                                      ║"
+echo "║   Press Ctrl+C to stop                               ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
 # Build the nono command
-# --allow: read/write access to OpenClaw state directory
-# --read:  read-only access to system libraries and fonts
-# --env:   pass through specific environment variables
 nono run \
     --allow "$OPENCLAW_DIR" \
     --allow /tmp/claw-proxy.sock \

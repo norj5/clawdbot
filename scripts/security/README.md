@@ -14,9 +14,9 @@ Custom security implementation for running OpenClaw in a Zero Trust environment 
 │     ↓                                       │
 │   Signs request (HMAC-SHA256)               │
 │     ↓                                       │
-└─────┤ Unix Socket ├─────────────────────────┘
+└─────┤ Unix Socket ├─────────────────────┘
       │
-┌─────┴──────────────────────────────────────┐
+┌─────┴──────────────────────────────────────────┐
 │   claw-proxy.py (daemon, OUTSIDE sandbox)  │
 │     ↓                                      │
 │   Verifies HMAC + checks blocked args      │
