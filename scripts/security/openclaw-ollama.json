@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.openclaw.ai/schema/openclaw.json",
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama-local/qwen3:32b",
+        "fallbacks": [
+          "anthropic/claude-sonnet-4-1",
+          "google/gemini-3-pro-preview",
+          "openai/gpt-4.1"
+        ]
+      },
+      "imageModel": {
+        "primary": "google/gemini-3-flash-preview",
+        "fallbacks": [
+          "openai/gpt-4.1"
+        ]
+      },
+      "models": {
+        "ollama-local/qwen3:32b":            { "alias": "qwen" },
+        "anthropic/claude-sonnet-4-1":        { "alias": "sonnet" },
+        "anthropic/claude-opus-4-5":          { "alias": "opus" },
+        "google/gemini-3-pro-preview":        { "alias": "gemini" },
+        "google/gemini-3-flash-preview":      { "alias": "flash" },
+        "openai/gpt-4.1":                     { "alias": "gpt" },
+        "openai/gpt-5.3":                     { "alias": "gpt5" }
+      }
+    }
+  },
+
+  "models": {
+    "providers": {
+      "ollama-local": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "api": "openai-completions",
+        "models": [
+          { "id": "qwen3:32b",                       "name": "Qwen3 32B" },
+          { "id": "qwen2.5-coder:32b-instruct-q4_K_M","name": "Qwen2.5 Coder 32B" },
+          { "id": "deepseek-r1:32b",                  "name": "DeepSeek R1 32B" },
+          { "id": "llama3.3:70b-instruct-q4_K_M",     "name": "Llama 3.3 70B" }
+        ]
+      }
+    }
+  },
+
+  "auth": {
+    "cooldowns": {
+      "billingBackoffHours": 5,
+      "billingMaxHours": 24,
+      "failureWindowHours": 24
+    }
+  }
+}
