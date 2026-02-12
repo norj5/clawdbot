@@ -14,9 +14,9 @@ Custom security implementation for running OpenClaw in a Zero Trust environment 
 │     ↓                                       │
 │   Signs request (HMAC-SHA256)               │
 │     ↓                                       │
-└─────┤ Unix Socket ├─────────────────────┘
+└─────┤ Unix Socket ├─────────────────────────┘
       │
-┌─────┴──────────────────────────────────────────┐
+┌─────┴──────────────────────────────────────┐
 │   claw-proxy.py (daemon, OUTSIDE sandbox)  │
 │     ↓                                      │
 │   Verifies HMAC + checks blocked args      │
@@ -38,7 +38,10 @@ Custom security implementation for running OpenClaw in a Zero Trust environment 
 # 2. Start everything
 ./start_secure.sh
 
-# 3. Verify security (in another terminal)
+# 3. Lock identity & config files
+./lock_identity.sh
+
+# 4. Verify security (in another terminal)
 ./verify_security.sh
 ```
 
@@ -52,7 +55,30 @@ Custom security implementation for running OpenClaw in a Zero Trust environment 
 | `setup_keychain.sh` | Interactive credential bootstrapping |
 | `start_secure.sh` | Master startup (Ollama → Proxy → Nono) |
 | `verify_security.sh` | Automated security checks |
-| `openclaw-hardened.json` | Hardened `openclaw.json` template |
+| `openclaw-hardened.json` | Hardened config with control-plane integrity |
+| `openclaw-ollama.json` | Model routing config with Ollama + cloud fallbacks |
+| `lock_identity.sh` | Kernel-level file protection (`chflags uchg`) |
+
+## Admin Maintenance (Editing Protected Files)
+
+Protected files (`SOUL.md`, `openclaw.json`) are locked with macOS kernel-level immutability. To edit:
+
+```bash
+# 1. Unlock
+./lock_identity.sh --unlock
+
+# 2. Edit what you need
+nano ~/.openclaw/SOUL.md
+nano ~/.openclaw/openclaw.json
+
+# 3. Re-lock
+./lock_identity.sh
+
+# Check status anytime
+./lock_identity.sh --status
+```
+
+> **Note:** Changing the active model via `/model sonnet` in Telegram does NOT require unlocking — it only changes the in-session model. Permanent config changes (new providers, fallbacks) require the unlock cycle above.
 
 ## Requirements
 
