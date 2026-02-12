@@ -53,8 +53,6 @@ HMAC_TOLERANCE_SECONDS = 30             # Reject requests older than this
 MAX_MESSAGE_SIZE = 1024 * 64            # 64KB max per request
 
 # Default tool configurations
-# Maps tool name -> { binary: real path, keychain_key: Keychain service name,
-#                     env_var: env var to inject, blocked_args: list }
 DEFAULT_TOOLS = {
     "gh": {
         "binary": "/usr/bin/gh",
@@ -68,11 +66,11 @@ DEFAULT_TOOLS = {
     },
     "curl": {
         "binary": "/usr/bin/curl",
-        "keychain_key": None,  # curl uses per-request headers
+        "keychain_key": None,
         "env_var": None,
         "blocked_args": [
-            "--upload-file", "-T",     # No file uploads
-            "--data-binary @/",        # No exfiltrating local files
+            "--upload-file", "-T",
+            "--data-binary @/",
         ],
     },
 }
@@ -107,7 +105,7 @@ def keychain_read(service: str, account: str = KEYCHAIN_ACCOUNT) -> str | None:
                 "security", "find-generic-password",
                 "-a", account,
                 "-s", service,
-                "-w",  # Output only the password
+                "-w",
             ],
             capture_output=True, text=True, timeout=5,
         )
@@ -122,7 +120,6 @@ def keychain_read(service: str, account: str = KEYCHAIN_ACCOUNT) -> str | None:
 
 def keychain_store(service: str, secret: str, account: str = KEYCHAIN_ACCOUNT) -> bool:
     """Store a secret in macOS Keychain."""
-    # First try to delete if exists (update)
     subprocess.run(
         ["security", "delete-generic-password", "-a", account, "-s", service],
         capture_output=True, timeout=5,
@@ -155,7 +152,6 @@ def sign_request(secret: str, payload: dict) -> str:
 
 def verify_request(secret: str, payload: dict, signature: str) -> bool:
     """Verify HMAC-SHA256 signature and check timestamp freshness."""
-    # Check timestamp freshness
     ts = payload.get("timestamp", 0)
     if abs(time.time() - ts) > HMAC_TOLERANCE_SECONDS:
         log.warning("Request too old: %.1f seconds", abs(time.time() - ts))
@@ -181,35 +177,27 @@ def check_blocked_args(tool_config: dict, args: list[str]) -> str | None:
 # ---------------------------------------------------------------------------
 
 def execute_tool(tool_name: str, args: list[str], tools_config: dict) -> dict:
-    """
-    Execute a tool with credentials injected from Keychain.
-    Returns {"stdout": ..., "stderr": ..., "returncode": ...}
-    """
     config = tools_config.get(tool_name)
     if not config:
         return {"stdout": "", "stderr": f"Unknown tool: {tool_name}", "returncode": 1}
 
-    # Check blocked arguments
     blocked = check_blocked_args(config, args)
     if blocked:
-        log.warning("BLOCKED: %s %s — %s", tool_name, args, blocked)
+        log.warning("BLOCKED: %s %s \u2014 %s", tool_name, args, blocked)
         return {
             "stdout": "",
-            "stderr": f"🚫 claw-proxy: {blocked}",
+            "stderr": f"\ud83d\udeab claw-proxy: {blocked}",
             "returncode": 126,
         }
 
-    # Resolve binary path
     binary = config.get("binary", f"/usr/bin/{tool_name}")
     if not os.path.isfile(binary):
-        # Try to find via which
         which = subprocess.run(["which", tool_name], capture_output=True, text=True)
         if which.returncode == 0:
             binary = which.stdout.strip()
         else:
             return {"stdout": "", "stderr": f"Binary not found: {binary}", "returncode": 127}
 
-    # Build environment with credential injected
     env = os.environ.copy()
     keychain_key = config.get("keychain_key")
     env_var = config.get("env_var")
@@ -222,7 +210,6 @@ def execute_tool(tool_name: str, args: list[str], tools_config: dict) -> dict:
         else:
             log.warning("No credential found in Keychain for %s", keychain_key)
 
-    # Inject any extra env vars from config
     for extra_env in config.get("extra_env", []):
         key = extra_env.get("key")
         kc_service = extra_env.get("keychain_key")
@@ -231,14 +218,13 @@ def execute_tool(tool_name: str, args: list[str], tools_config: dict) -> dict:
             if val:
                 env[key] = val
 
-    # Execute
     cmd = [binary] + args
     log.info("EXECUTE: %s", " ".join(cmd))
 
     try:
         result = subprocess.run(
             cmd, env=env, capture_output=True, text=True,
-            timeout=120,  # 2 minute timeout
+            timeout=120,
         )
         return {
             "stdout": result.stdout,
@@ -260,19 +246,16 @@ class ProxyDaemon:
         self.shared_secret = shared_secret
         self.tools_config = tools_config
         self.running = False
-        self._seen_nonces: dict[str, float] = {}  # nonce -> timestamp (replay protection)
+        self._seen_nonces: dict[str, float] = {}
 
     def _cleanup_nonces(self):
-        """Remove expired nonces."""
         cutoff = time.time() - HMAC_TOLERANCE_SECONDS * 2
         self._seen_nonces = {
             k: v for k, v in self._seen_nonces.items() if v > cutoff
         }
 
     def handle_client(self, conn: socket.socket):
-        """Handle a single client connection."""
         try:
-            # Read message (length-prefixed)
             raw = b""
             while True:
                 chunk = conn.recv(4096)
@@ -284,7 +267,6 @@ class ProxyDaemon:
                         "error": "Message too large"
                     }).encode())
                     return
-                # Messages are newline-terminated
                 if b"\n" in raw:
                     break
 
@@ -295,14 +277,12 @@ class ProxyDaemon:
             signature = msg.get("signature", "")
             payload = msg.get("payload", {})
 
-            # Verify HMAC
             if not verify_request(self.shared_secret, payload, signature):
                 log.warning("REJECTED: Invalid HMAC signature")
                 response = {"error": "Authentication failed", "returncode": 403}
                 conn.sendall((json.dumps(response) + "\n").encode())
                 return
 
-            # Replay protection
             nonce = payload.get("nonce", "")
             if nonce in self._seen_nonces:
                 log.warning("REJECTED: Replay detected (nonce=%s)", nonce[:8])
@@ -312,7 +292,6 @@ class ProxyDaemon:
             self._seen_nonces[nonce] = time.time()
             self._cleanup_nonces()
 
-            # Execute tool
             tool = payload.get("tool", "")
             args = payload.get("args", [])
 
@@ -330,21 +309,17 @@ class ProxyDaemon:
             conn.close()
 
     def start(self):
-        """Start the daemon."""
-        # Clean up old socket
         if os.path.exists(self.socket_path):
             os.unlink(self.socket_path)
 
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         server.bind(self.socket_path)
-        # Restrict socket permissions (owner only)
         os.chmod(self.socket_path, 0o600)
         server.listen(5)
-        server.settimeout(1.0)  # Allow checking self.running periodically
+        server.settimeout(1.0)
 
         self.running = True
 
-        # Write PID file
         with open(PID_FILE, "w") as f:
             f.write(str(os.getpid()))
 
@@ -381,12 +356,9 @@ class ProxyDaemon:
 # ---------------------------------------------------------------------------
 
 def load_config(config_path: str | None) -> dict:
-    """Load tool configuration from YAML/JSON file, or use defaults."""
     if config_path and os.path.isfile(config_path):
         with open(config_path) as f:
             if config_path.endswith((".yaml", ".yml")):
-                # Minimal YAML parser (no PyYAML dependency)
-                # For complex configs, use JSON instead
                 log.warning("YAML config requires PyYAML. Use JSON for zero dependencies.")
                 return DEFAULT_TOOLS
             return json.load(f)
@@ -397,21 +369,17 @@ def load_config(config_path: str | None) -> dict:
 # ---------------------------------------------------------------------------
 
 def cmd_daemon(args):
-    """Start the proxy daemon."""
     setup_logging(args.verbose)
-
     tools_config = load_config(args.config)
 
-    # Generate or read shared secret
     if args.secret:
         secret = args.secret
     else:
         secret = generate_shared_secret()
 
-    # Write shared secret to auth file (readable by sandbox client)
     with open(AUTH_FILE, "w") as f:
         f.write(secret)
-    os.chmod(AUTH_FILE, 0o644)  # Client in sandbox needs to read this
+    os.chmod(AUTH_FILE, 0o644)
     log.info("Shared secret written to %s", AUTH_FILE)
 
     daemon = ProxyDaemon(
@@ -423,42 +391,38 @@ def cmd_daemon(args):
 
 
 def cmd_status(args):
-    """Check daemon status."""
     if os.path.exists(PID_FILE):
         with open(PID_FILE) as f:
             pid = f.read().strip()
-        # Check if process is alive
         try:
             os.kill(int(pid), 0)
-            print(f"✅ claw-proxy daemon running (PID {pid})")
+            print(f"\u2705 claw-proxy daemon running (PID {pid})")
             print(f"   Socket: {SOCKET_PATH}")
             print(f"   Auth file: {AUTH_FILE}")
         except (OSError, ValueError):
-            print("⚠️  PID file exists but daemon is not running")
+            print("\u26a0\ufe0f  PID file exists but daemon is not running")
     else:
-        print("❌ claw-proxy daemon is not running")
+        print("\u274c claw-proxy daemon is not running")
 
 
 def cmd_stop(args):
-    """Stop the daemon."""
     if os.path.exists(PID_FILE):
         with open(PID_FILE) as f:
             pid = int(f.read().strip())
         try:
             os.kill(pid, signal.SIGTERM)
-            print(f"🛑 Sent SIGTERM to daemon (PID {pid})")
+            print(f"\ud83d\uded1 Sent SIGTERM to daemon (PID {pid})")
         except OSError as e:
-            print(f"⚠️  Could not stop daemon: {e}")
+            print(f"\u26a0\ufe0f  Could not stop daemon: {e}")
     else:
-        print("❌ No daemon PID file found")
+        print("\u274c No daemon PID file found")
 
 
 def cmd_test(args):
-    """Send a test request to the daemon."""
     setup_logging(False)
 
     if not os.path.exists(AUTH_FILE):
-        print("❌ No auth file found. Is the daemon running?")
+        print("\u274c No auth file found. Is the daemon running?")
         sys.exit(1)
 
     with open(AUTH_FILE) as f:
@@ -497,11 +461,10 @@ def cmd_test(args):
 def main():
     parser = argparse.ArgumentParser(
         prog="claw-proxy",
-        description="Credential proxy daemon — keeps secrets out of the sandbox.",
+        description="Credential proxy daemon \u2014 keeps secrets out of the sandbox.",
     )
     sub = parser.add_subparsers(dest="command")
 
-    # daemon
     p_daemon = sub.add_parser("daemon", help="Start the proxy daemon")
     p_daemon.add_argument("-c", "--config", help="Path to tool config file (JSON)")
     p_daemon.add_argument("-s", "--socket", help=f"Socket path (default: {SOCKET_PATH})")
@@ -509,15 +472,12 @@ def main():
     p_daemon.add_argument("-v", "--verbose", action="store_true")
     p_daemon.set_defaults(func=cmd_daemon)
 
-    # status
     p_status = sub.add_parser("status", help="Check daemon status")
     p_status.set_defaults(func=cmd_status)
 
-    # stop
     p_stop = sub.add_parser("stop", help="Stop the daemon")
     p_stop.set_defaults(func=cmd_stop)
 
-    # test
     p_test = sub.add_parser("test", help="Send a test request")
     p_test.add_argument("tool", help="Tool name (e.g., gh)")
     p_test.add_argument("tool_args", nargs="*", help="Tool arguments")
