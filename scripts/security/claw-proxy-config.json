@@ -1,0 +1,25 @@
+{
+    "tools": {
+        "gh": {
+            "binary": "/usr/bin/gh",
+            "keychain_key": "openclaw/GH_TOKEN",
+            "env_var": "GH_TOKEN",
+            "blocked_args": [
+                "repo delete",
+                "repo archive",
+                "auth logout",
+                "ssh-key add",
+                "ssh-key delete",
+                "secret set",
+                "api -X DELETE",
+                "api -X PUT"
+            ]
+        }
+    },
+    "socket_path": "/tmp/claw-proxy.sock",
+    "auth_file": "/tmp/claw-proxy.auth",
+    "keychain_account": "openclaw-runner",
+    "hmac_tolerance_seconds": 30,
+    "log_file": "~/.openclaw/claw-proxy.log",
+    "timeout_seconds": 120
+}
