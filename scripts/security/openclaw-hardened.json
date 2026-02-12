@@ -8,17 +8,10 @@
         "bind": "loopback",
         "tailscale": "serve",
         "nodes": {
+            "_comment": "Only block dangerous system-level commands. The Mac is dedicated to the bot with its own Apple account, so calendar, browser, contacts, reminders, SMS, and screen capture are allowed.",
             "denyCommands": [
                 "system.run",
-                "system.which",
-                "browser.proxy",
-                "camera.snap",
-                "camera.clip",
-                "screen.record",
-                "contacts.add",
-                "calendar.add",
-                "reminders.add",
-                "sms.send"
+                "system.which"
             ]
         }
     },
